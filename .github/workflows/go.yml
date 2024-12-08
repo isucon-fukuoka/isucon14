@@ -1,0 +1,60 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          ssh-key: ${{ secrets.GITHUB_DEPLOY_KEY }}
+      - name: Add Remote Server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p 22 ${{ secrets.REMOTE_HOST }} >> ~/.ssh/known_hosts
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Install rsync
+        run: sudo apt-get install -y rsync
+
+      - name: Deploy Repository to Remote Server
+        run: |
+          ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sudo rm -rf /home/isucon/webapp/go && mkdir -p project"
+          # etc/nginx, etc/mysql, sqlディレクトリを除外
+          rsync -avz -e "ssh -p 22" \
+            --exclude 'etc/nginx/' \
+            --exclude 'etc/mysql/' \
+            --exclude 'sql/' \
+            . ubuntu@${{ secrets.REMOTE_HOST }}:/home/ubuntu/project
+          ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sudo mv /home/ubuntu/project /home/isucon/webapp/go/ && sudo chown -R isucon:isucon /home/isucon/webapp/go && sudo -u isucon git -C /home/isucon/webapp/go remote set-url origin git@github.com:${{ github.repository }}.git"
+
+      - name: Deploy Nginx and MySQL Config Directories
+        run: |
+          # etc/nginxディレクトリを/etc/nginxへデプロイ
+          rsync -avz -e "ssh -p 22" ./etc/nginx/ ubuntu@${{ secrets.REMOTE_HOST }}:/home/ubuntu/nginx
+          ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sudo rm -rf /etc/nginx && sudo mv /home/ubuntu/nginx /etc/nginx && sudo chown -R root:root /etc/nginx"
+
+          # etc/mysqlディレクトリを/etc/mysqlへデプロイ
+          rsync -avz -e "ssh -p 22" ./etc/mysql/ ubuntu@${{ secrets.REMOTE_HOST }}:/home/ubuntu/mysql
+          ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sudo rm -rf /etc/mysql && sudo mv /home/ubuntu/mysql /etc/mysql && sudo chown -R root:root /etc/mysql"
+
+      - name: Deploy SQL Files
+        run: |
+          # sqlディレクトリをリモートへ同期
+          rsync -avz -e "ssh -p 22" ./sql/ ubuntu@${{ secrets.REMOTE_HOST }}:/home/ubuntu/sql/
+          ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sudo rm -rf /home/isucon/webapp/sql && sudo mv /home/ubuntu/sql /home/isucon/webapp/ && sudo chown -R isucon:isucon /home/isucon/webapp/sql"
+
+      - name: Build on Remote Server
+        run: |
+          ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sudo -i -u isucon bash -c 'export PATH=\$PATH:/home/isucon/local/go/bin; cd /home/isucon/webapp/go && make'"
+
+      - name: Reload System
+        run: ssh -p 22 ubuntu@${{ secrets.REMOTE_HOST }} "sh /home/ubuntu/reload.sh"

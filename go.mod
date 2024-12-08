@@ -1,6 +1,8 @@
 module github.com/isucon/isucon14/webapp/go
 
-go 1.23
+go 1.23.3
+
+toolchain go1.23.4
 
 require (
 	github.com/go-chi/chi/v5 v5.1.0
