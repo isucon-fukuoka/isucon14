@@ -30,14 +30,13 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	if err := db.GetContext(ctx, matched, `
 SELECT
     cha.*
-    , abs((loc.latitude - ?)) + abs((loc.longitude - ?)) AS distance
 FROM
     chairs cha
     INNER JOIN chair_locations loc
         ON loc.chair_id = cha.id
 WHERE
     cha.is_active = TRUE
-ORDER BY distance
+ORDER BY abs((loc.latitude - ?)) + abs((loc.longitude - ?))
 LIMIT 1`, ride.PickupLatitude, ride.PickupLongitude); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNoContent)
