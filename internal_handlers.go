@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
 // このAPIをインスタンス内から一定間隔で叩かせることで、椅子とライドをマッチングさせる
 func internalGetMatching(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("internalGetMatching start!!!")
 	ctx := r.Context()
 	// MEMO: 一旦最も待たせているリクエストに適当な空いている椅子マッチさせる実装とする。おそらくもっといい方法があるはず…
 	ride := &Ride{}
@@ -19,11 +21,13 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	fmt.Println("aaaa")
+	fmt.Println(ride)
+	fmt.Println("bbbb")
 
 	matched := &Chair{}
 	empty := false
-	for i := 0; i < 10; i++ {
-		if err := db.GetContext(ctx, matched, `
+	if err := db.GetContext(ctx, matched, `
 SELECT
     cha.*
     , abs((loc.latitude - ?)) + abs((loc.longitude - ?)) AS distance
@@ -35,21 +39,25 @@ WHERE
     cha.is_active = TRUE
 ORDER BY distance
 LIMIT 1`, ride.PickupLatitude, ride.PickupLongitude); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			writeError(w, http.StatusInternalServerError, err)
-		}
-
-		if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", matched.ID); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if empty {
-			break
-		}
+		writeError(w, http.StatusInternalServerError, err)
 	}
+	fmt.Println("cccc")
+	fmt.Println(matched)
+	fmt.Println("dddd")
+
+	if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", matched.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	fmt.Println("eeee")
+	fmt.Println(empty)
+	fmt.Println("ffff")
+
 	if !empty {
 		w.WriteHeader(http.StatusNoContent)
 		return
