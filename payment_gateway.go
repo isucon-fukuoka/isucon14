@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 )
 
 var erroredUpstream = errors.New("errored upstream")
@@ -29,7 +28,6 @@ func requestPaymentGatewayPostPayment(ctx context.Context, paymentGatewayURL str
 
 	// 失敗したらとりあえずリトライ
 	// FIXME: 社内決済マイクロサービスのインフラに異常が発生していて、同時にたくさんリクエストすると変なことになる可能性あり
-	retry := 0
 	for {
 		err := func() error {
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost, paymentGatewayURL+"/payments", bytes.NewBuffer(b))
@@ -82,13 +80,7 @@ func requestPaymentGatewayPostPayment(ctx context.Context, paymentGatewayURL str
 			return nil
 		}()
 		if err != nil {
-			if retry < 5 {
-				retry++
-				time.Sleep(100 * time.Millisecond)
-				continue
-			} else {
-				return err
-			}
+			return err
 		}
 		break
 	}
