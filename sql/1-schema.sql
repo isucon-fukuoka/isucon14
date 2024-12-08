@@ -140,3 +140,7 @@ CREATE TABLE coupons
 )
   COMMENT 'クーポンテーブル';
 ALTER TABLE coupons ADD INDEX idx_used_by (used_by);
+
+ALTER TABLE chair_locations ADD INDEX idx_chair_id (chair_id);
+ALTER TABLE rides ADD INDEX idx_chair_id (chair_id);
+ALTER TABLE ride_statuses ADD INDEX idx_ride_id (ride_id);
