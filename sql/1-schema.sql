@@ -94,6 +94,7 @@ CREATE TABLE rides
   PRIMARY KEY (id)
 )
   COMMENT = 'ライド情報テーブル';
+ALTER TABLE rides ADD INDEX idx_chair_id (chair_id, updated_at DESC);
 
 DROP TABLE IF EXISTS ride_statuses;
 CREATE TABLE ride_statuses
