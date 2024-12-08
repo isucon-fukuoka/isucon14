@@ -26,9 +26,7 @@ func internalGetMatching(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("bbbb")
 
 	matched := &Chair{}
-	empty := false
-	if err := db.GetContext(ctx, matched, `
-SELECT
+	if err := db.GetContext(ctx, matched, `SELECT
     cha.*
 FROM
     chairs cha
@@ -36,8 +34,27 @@ FROM
         ON loc.chair_id = cha.id
 WHERE
     cha.is_active = TRUE
-ORDER BY abs((loc.latitude - ?)) + abs((loc.longitude - ?))
-LIMIT 1`, ride.PickupLatitude, ride.PickupLongitude); err != nil {
+    AND (
+        SELECT
+            count(*) = 0
+        FROM
+            (
+                SELECT
+                    count(chair_sent_at) = 6 AS completed
+                FROM
+                    ride_statuses
+                WHERE
+                    ride_id IN (SELECT id FROM rides WHERE chair_id = cha.id)
+                GROUP BY
+                    ride_id
+            ) is_completed
+        WHERE
+            completed = FALSE
+    )
+ORDER BY
+    abs((loc.latitude - ?)) + abs((loc.longitude - ?))
+LIMIT
+    1`, ride.PickupLatitude, ride.PickupLongitude); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -47,20 +64,6 @@ LIMIT 1`, ride.PickupLatitude, ride.PickupLongitude); err != nil {
 	fmt.Println("cccc")
 	fmt.Println(matched)
 	fmt.Println("dddd")
-
-	if err := db.GetContext(ctx, &empty, "SELECT COUNT(*) = 0 FROM (SELECT COUNT(chair_sent_at) = 6 AS completed FROM ride_statuses WHERE ride_id IN (SELECT id FROM rides WHERE chair_id = ?) GROUP BY ride_id) is_completed WHERE completed = FALSE", matched.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-
-	fmt.Println("eeee")
-	fmt.Println(empty)
-	fmt.Println("ffff")
-
-	if !empty {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
 
 	if _, err := db.ExecContext(ctx, "UPDATE rides SET chair_id = ? WHERE id = ?", matched.ID, ride.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
