@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -58,12 +59,20 @@ func setup() http.Handler {
 	dbConfig.Net = "tcp"
 	dbConfig.DBName = dbname
 	dbConfig.ParseTime = true
+	dbConfig.Params = map[string]string{
+    	"interpolateParams": "true",
+	}
 
 	_db, err := sqlx.Connect("mysql", dbConfig.FormatDSN())
 	if err != nil {
 		panic(err)
 	}
 	db = _db
+	maxOpenConns := 30
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxOpenConns)
+	db.SetConnMaxLifetime(time.Second * time.Duration(maxOpenConns))
+	db.SetConnMaxIdleTime(time.Second * time.Duration(maxOpenConns))
 
 	mux := chi.NewRouter()
 	mux.Use(middleware.Logger)
