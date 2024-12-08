@@ -203,7 +203,26 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 	if err := tx.SelectContext(
 		ctx,
 		&rides,
-		`SELECT * FROM rides WHERE user_id = ? ORDER BY created_at DESC`,
+		`SELECT
+    rid.*
+FROM
+    rides rid
+WHERE
+    rid.user_id = ?
+    AND (
+        SELECT
+            status = 'COMPLETED'
+        FROM
+            ride_statuses
+        WHERE
+            ride_id = rid.id
+        ORDER BY
+            created_at DESC
+        LIMIT
+            1
+    )
+ORDER BY
+    created_at DESC`,
 		user.ID,
 	); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -212,15 +231,6 @@ func appGetRides(w http.ResponseWriter, r *http.Request) {
 
 	items := []getAppRidesResponseItem{}
 	for _, ride := range rides {
-		status, err := getLatestRideStatus(ctx, tx, ride.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-		if status != "COMPLETED" {
-			continue
-		}
-
 		fare, err := calculateDiscountedFare(ctx, tx, user.ID, &ride, ride.PickupLatitude, ride.PickupLongitude, ride.DestinationLatitude, ride.DestinationLongitude)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
